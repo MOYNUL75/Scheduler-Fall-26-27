@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedula — find any class routine</title>
+<meta name="description" content="Look up any AIUB faculty, batch section, course or room and see the full weekly class routine — instantly, from the official offered-course report.">
+<link rel="icon" href="assets/schedula-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- SheetJS: parses the .xlsx entirely in the visitor's browser. Authoritative CDN per docs.sheetjs.com -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#0a1119;
+    --panel:#101b26;
+    --panel-2:#0c1620;
+    --raised:#15222f;
+    --line:rgba(255,255,255,.09);
+    --line-soft:rgba(255,255,255,.05);
+    --paper:#eef4f7;
+    --mute:#8ea2af;
+    --mute-2:#5f7481;
+    --signal:#ffb648;
+    --signal-ink:#1a1206;
+    --good:#4fd1a5;
+    --bad:#ff7a7a;
+    --lane-a:#2f8f88;
+    --lane-a-soft:#1c4b47;
+    --lane-b:#c96a3d;
+    --lane-b-soft:#5c3320;
+    --radius:14px;
+    --radius-sm:9px;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',monospace;
+    --px-per-min: 1;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 600px at 12% -10%, rgba(47,143,136,.16), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(255,182,72,.08), transparent 55%),
+      var(--ink);
+    color:var(--paper);
+    font-family:var(--body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  ::selection{background:var(--signal);color:var(--signal-ink);}
+  :focus-visible{outline:2px solid var(--signal); outline-offset:2px; border-radius:4px;}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 64px;}
+
+  /* ---------- header / hero ---------- */
+  header.top{padding:28px 20px 10px;max-width:1180px;margin:0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{
+    width:40px;height:40px;border-radius:10px;flex:none;
+    background:linear-gradient(155deg,var(--lane-a),#173b38 70%);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:600;font-size:15px;color:var(--paper);
+    box-shadow:0 0 0 1px var(--line), 0 8px 20px -8px rgba(47,143,136,.6);
+    overflow:hidden;
+  }
+  .brand .mark img{width:40px;height:40px;display:block;}
+  .brand h1{font-family:var(--disp);font-size:19px;font-weight:700;margin:0;letter-spacing:.2px;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--mute);font-family:var(--mono);letter-spacing:.3px;}
+  .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+  .btn{
+    appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--paper);
+    padding:9px 14px;border-radius:999px;font-family:var(--body);font-weight:600;font-size:13px;
+    cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .15s,transform .1s,background .15s;
+  }
+  .btn:hover{border-color:rgba(255,255,255,.22);}
+  .btn:active{transform:translateY(1px);}
+  .btn.on{background:var(--signal);color:var(--signal-ink);border-color:var(--signal);}
+  .btn.ghost{background:transparent;}
+  .btn.small{padding:6px 11px;font-size:12px;}
+
+  .hero{padding:26px 20px 8px;max-width:1180px;margin:0 auto;}
+  .hero h2{font-family:var(--disp);font-weight:600;font-size:clamp(22px,3.4vw,32px);margin:0 0 6px;letter-spacing:.1px;}
+  .hero h2 em{font-style:normal;color:var(--signal);}
+  .hero .sub{color:var(--mute);font-size:14.5px;margin:0 0 22px;max-width:62ch;}
+
+  /* ---------- search ---------- */
+  .searchbar{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:6px;display:flex;gap:6px;align-items:stretch;box-shadow:0 20px 40px -24px rgba(0,0,0,.65);
+    position:relative;
+  }
+  .search-slot{flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;position:relative;}
+  .search-slot .tag{
+    font-family:var(--mono);font-size:10.5px;color:var(--mute-2);border:1px solid var(--line);
+    padding:2px 6px;border-radius:5px;flex:none;letter-spacing:.4px;
+  }
+  .search-slot input{
+    flex:1;background:transparent;border:none;color:var(--paper);font-family:var(--body);
+    font-size:15px;font-weight:500;min-width:0;
+  }
+  .search-slot input::placeholder{color:var(--mute-2);}
+  .search-slot .clear-x{
+    background:none;border:none;color:var(--mute);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px;flex:none;
+  }
+  .search-slot .clear-x:hover{color:var(--paper);background:var(--raised);}
+  .search-divider{width:1px;background:var(--line);margin:8px 0;flex:none;display:none;}
+  .compare-mode .search-divider{display:block;}
+
+  .suggest{
+    position:absolute;left:0;right:0;top:calc(100% + 8px);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 24px 48px -20px rgba(0,0,0,.75);
+    max-height:360px;overflow-y:auto;z-index:40;display:none;
+  }
+  .suggest.open{display:block;}
+  .suggest .row{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;border-bottom:1px solid var(--line-soft);}
+  .suggest .row:last-child{border-bottom:none;}
+  .suggest .row:hover,.suggest .row.active{background:var(--raised);}
+  .suggest .row .label{font-weight:600;font-size:14px;}
+  .suggest .row .sub{font-size:11.5px;color:var(--mute);font-family:var(--mono);white-space:nowrap;}
+  .suggest .kind{
+    font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;
+    padding:2px 6px;border-radius:5px;flex:none;
+  }
+  .kind.faculty{background:rgba(47,143,136,.22);color:#7fdcd3;}
+  .kind.section{background:rgba(255,182,72,.18);color:var(--signal);}
+  .kind.course{background:rgba(159,140,255,.18);color:#b6a6ff;}
+  .kind.room{background:rgba(201,106,61,.2);color:#f0a479;}
+  .suggest .empty{padding:16px 14px;color:var(--mute);font-size:13px;}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0;}
+  .chip{
+    font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:999px;border:1px dashed var(--line);
+    color:var(--mute);cursor:pointer;background:transparent;
+  }
+  .chip:hover{border-color:var(--signal);color:var(--signal);}
+  .chip strong{color:inherit;}
+
+  /* ---------- filters ---------- */
+  .filters{margin-top:18px;}
+  .filters-head{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;}
+  .filters-head .caret{transition:transform .15s;color:var(--mute);}
+  .filters.open .caret{transform:rotate(90deg);}
+  .filters-head span.lbl{font-family:var(--mono);font-size:12px;color:var(--mute);letter-spacing:.4px;}
+  .filters-body{display:none;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:12px;padding:16px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);}
+  .filters.open .filters-body{display:grid;}
+  .f-group h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute-2);font-weight:700;}
+  .f-opt{display:flex;align-items:center;gap:7px;font-size:13px;padding:3px 0;color:var(--paper);cursor:pointer;}
+  .f-opt input{accent-color:var(--signal);}
+
+  /* ---------- status / empty ---------- */
+  .banner{margin:20px auto 0;max-width:1180px;padding:0 20px;}
+  .notice{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius-sm);padding:14px 16px;font-size:13.5px;color:var(--mute);display:flex;gap:10px;}
+  .notice.err{border-color:rgba(255,122,122,.4);background:rgba(255,122,122,.06);color:#ffb3b3;}
+  .notice code{font-family:var(--mono);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;}
+
+  /* ---------- results meta / legend ---------- */
+  .results-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:26px 0 14px;}
+  .entity-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .entity-title{font-family:var(--disp);font-size:20px;font-weight:600;}
+  .entity-sub{font-family:var(--mono);font-size:12px;color:var(--mute);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mute);}
+  .legend .dot{width:11px;height:11px;border-radius:4px;flex:none;}
+
+  /* ---------- grid ---------- */
+  .grid-shell{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel);box-shadow:0 30px 60px -30px rgba(0,0,0,.7);}
+  .grid-scroll{overflow-x:auto;}
+  .grid-head{display:grid;grid-template-columns:56px repeat(7,minmax(128px,1fr));border-bottom:1px solid var(--line);min-width:960px;}
+  .grid-head .cell{padding:12px 8px;text-align:center;font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.2px;border-left:1px solid var(--line-soft);}
+  .grid-head .cell:first-child{border-left:none;}
+  .grid-body-wrap{display:grid;grid-template-columns:56px repeat(7,minmax(128px,1fr));min-width:960px;position:relative;}
+  .gutter{position:relative;background:var(--panel-2);}
+  .gutter .hr{position:absolute;left:0;right:0;transform:translateY(-6px);font-family:var(--mono);font-size:10px;color:var(--mute-2);text-align:right;padding-right:7px;}
+  .daycol{position:relative;border-left:1px solid var(--line-soft);background-image:repeating-linear-gradient(to bottom, transparent 0, transparent 59px, var(--line-soft) 60px);}
+  .daycol.weekend{background-color:rgba(255,255,255,.012);}
+  .ev{
+    position:absolute;border-radius:8px;padding:6px 7px;overflow:hidden;color:#f3f8fa;
+    box-shadow:0 1px 0 rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.08);
+    cursor:pointer;transition:filter .12s, transform .12s;
+  }
+  .ev:hover{filter:brightness(1.14);transform:translateY(-1px);z-index:5;}
+  .ev .t-title{font-weight:700;font-size:11.3px;line-height:1.22;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .ev .t-meta{font-size:10.2px;opacity:.92;margin-top:2px;}
+  .ev .t-room{font-size:10.2px;opacity:.92;font-family:var(--mono);}
+  .ev .t-time{position:absolute;left:7px;right:7px;bottom:5px;font-family:var(--mono);font-size:9.6px;opacity:.85;}
+  .ev.compact .t-meta,.ev.compact .t-room{display:none;}
+
+  .empty-grid{padding:60px 20px;text-align:center;color:var(--mute);}
+  .empty-grid .big{font-family:var(--disp);font-size:18px;color:var(--paper);margin-bottom:6px;}
+
+  /* ---------- gaps panel ---------- */
+  .gaps{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);padding:14px 16px;}
+  .gaps h4{margin:0 0 10px;font-family:var(--disp);font-size:14px;}
+  .gaps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .gaps-grid .dayblock .dname{font-family:var(--mono);font-size:11px;color:var(--mute-2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+  .gaps-grid .dayblock .win{font-size:12.5px;color:var(--good);font-family:var(--mono);}
+  .gaps-grid .dayblock .none{font-size:12px;color:var(--mute-2);}
+
+  /* ---------- table ---------- */
+  .table-toggle{margin-top:20px;}
+  .table-wrap{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:auto;display:none;}
+  .table-wrap.open{display:block;}
+  table.sched{width:100%;border-collapse:collapse;font-size:12.8px;min-width:760px;}
+  table.sched th{text-align:left;padding:9px 12px;background:var(--panel-2);color:var(--mute);font-weight:600;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line);position:sticky;top:0;}
+  table.sched td{padding:9px 12px;border-bottom:1px solid var(--line-soft);}
+  table.sched tr:hover td{background:rgba(255,255,255,.03);}
+  .pill{font-size:10.5px;font-family:var(--mono);padding:2px 7px;border-radius:999px;border:1px solid var(--line);}
+  .pill.Open{color:#7fdcd3;border-color:rgba(127,220,211,.4);}
+  .pill.Freshman{color:var(--signal);border-color:rgba(255,182,72,.4);}
+  .pill.Reserved{color:#b6a6ff;border-color:rgba(182,166,255,.4);}
+  .pill.Cancel{color:var(--bad);border-color:rgba(255,122,122,.4);}
+  .pill.Closed{color:var(--mute-2);border-color:var(--line);}
+
+  /* ---------- detail popover ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(3,7,11,.6);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:80;padding:20px;}
+  .overlay.open{display:flex;}
+  .detail{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:420px;width:100%;box-shadow:0 40px 80px -30px rgba(0,0,0,.8);}
+  .detail h3{font-family:var(--disp);margin:0 0 4px;font-size:18px;}
+  .detail .code{font-family:var(--mono);color:var(--mute);font-size:12px;margin-bottom:14px;}
+  .detail dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;}
+  .detail dt{color:var(--mute-2);font-size:12px;font-family:var(--mono);}
+  .detail dd{margin:0;font-size:13.5px;}
+  .detail .close{margin-top:18px;width:100%;}
+
+  /* ---------- footer ---------- */
+  footer{max-width:1180px;margin:50px auto 0;padding:20px;border-top:1px solid var(--line);color:var(--mute-2);font-size:12px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+  footer a{color:var(--mute);text-decoration:underline;text-underline-offset:2px;}
+  #diagBtn{background:none;border:none;color:var(--mute-2);text-decoration:underline;cursor:pointer;font-size:12px;font-family:var(--body);}
+  #diagPanel{display:none;white-space:pre-wrap;font-family:var(--mono);font-size:11px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;max-height:200px;overflow:auto;}
+  #diagPanel.open{display:block;}
+
+  @media (max-width:640px){
+    .results-meta{align-items:flex-start;}
+    .grid-head, .grid-body-wrap{grid-template-columns:44px repeat(7,120px);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition-duration:0.001ms !important; animation-duration:.001ms !important;}
+  }
+  @media print{
+    header,.hero .sub,.searchbar,.chips,.filters,footer,.table-toggle,.gaps{display:none !important;}
+    body{background:#fff;color:#000;}
+    .grid-shell,.daycol,.gutter{background:#fff !important;border-color:#ccc !important;}
+    .ev{box-shadow:none;color:#fff;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark"><img src="assets/schedula-mark.svg" alt="Schedula logo"></div>
+    <div>
+      <h1>Schedula</h1>
+      <p>faculty · batch · course · room</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="btn" id="compareBtn" aria-pressed="false">⇄ Compare two</button>
+    <button class="btn ghost small" id="printBtn">Print</button>
+  </div>
+</header>
+
+<section class="hero">
+  <h2>Find <em>any</em> class routine in one search.</h2>
+  <p class="sub">Search a faculty member, a freshman batch (B1, B2…), a course, or a room number. Schedula reads AIUB's own offered-course report and lays out the full week for you — no login, no spreadsheet scrolling.</p>
+
+  <div class="searchbar compare-mode-target" id="searchbar">
+    <div class="search-slot">
+      <span class="tag" id="slotTagA">A</span>
+      <input type="text" id="inputA" autocomplete="off" placeholder="Type a faculty name, e.g. B1, or CSC1103…" aria-label="Search faculty, batch section, course, or room">
+      <button class="clear-x" id="clearA" title="Clear" aria-label="Clear search A" hidden>✕</button>
+      <div class="suggest" id="suggestA" role="listbox"></div>
+    </div>
+    <div class="search-divider"></div>
+    <div class="search-slot" id="slotB" style="display:none;">
+      <span class="tag">B</span>
+      <input type="text" id="inputB" autocomplete="off" placeholder="Second faculty, batch, course, or room…" aria-label="Search second entity to compare">
+      <button class="clear-x" id="clearB" title="Clear" aria-label="Clear search B" hidden>✕</button>
+      <div class="suggest" id="suggestB" role="listbox"></div>
+    </div>
+  </div>
+
+  <div class="chips" id="quickChips"></div>
+
+  <div class="filters" id="filtersToggle">
+    <div class="filters-head" id="filtersHead">
+      <span class="caret">▸</span>
+      <span class="lbl">FILTERS — department · status · day · type</span>
+    </div>
+    <div class="filters-body" id="filtersBody"></div>
+  </div>
+</section>
+
+<div class="banner" id="banner"></div>
+
+<main class="wrap" id="mainArea" style="display:none;">
+  <div class="results-meta" id="resultsMeta"></div>
+  <div class="grid-shell">
+    <div class="grid-scroll">
+      <div class="grid-head" id="gridHead"></div>
+      <div class="grid-body-wrap" id="gridBody"></div>
+    </div>
+  </div>
+  <div id="gapsPanel"></div>
+
+  <div class="table-toggle">
+    <button class="btn ghost small" id="tableToggleBtn">▾ View as table</button>
+  </div>
+  <div class="table-wrap" id="tableWrap">
+    <table class="sched" id="schedTable">
+      <thead><tr><th>Day</th><th>Time</th><th>Course</th><th>Section</th><th>Faculty</th><th>Room</th><th>Type</th><th>Status</th><th>Seats</th></tr></thead>
+      <tbody id="schedTableBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="detail" id="detailBox"></div>
+</div>
+
+<footer>
+  <div>
+    Data: <code style="font-family:var(--mono)">data/Offered_Course_Report.xlsx</code>, read fresh on every visit.
+    <span id="lastMod"></span><br>
+    <button id="diagBtn">Data diagnostics</button>
+    <div id="diagPanel"></div>
+  </div>
+  <div>Unofficial, built by a student for AIUB students. Not affiliated with AIUB administration. <a href="https://github.com" target="_blank" rel="noopener">Source</a></div>
+</footer>
+
+<script>
+'use strict';
+
+/* ============================= CONFIG ============================= */
+const CONFIG = {
+  DATA_URL: './data/Offered_Course_Report.xlsx',
+  DAYS: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+  WEEKEND: new Set(['Friday','Saturday']),
+  COHORT_RE: /^[A-Za-z]{1,3}\d{1,4}$/,
+  MIN_GAP_MIN: 20,
+};
+const PALETTE = [
+  '#2f7a78','#7a3448','#6b6321','#324a8a','#7a4a1f','#453f8a',
+  '#1f6b56','#7a1f5c','#556b1f','#1f5c7a','#7a3f1f','#3f7a5c',
+  '#5c3f8a','#8a5c1f','#1f8a6b','#8a2f4a'
+];
+const STATUS_ORDER = ['Open','Freshman','Reserved','Cancel','Closed'];
+const DEFAULT_STATUSES = new Set(['Open','Freshman','Reserved']);
+
+/* ============================= STATE ============================= */
+const STATE = {
+  records: [],
+  idx: null,          // {faculty, sections, courses, rooms}
+  searchIndex: [],     // flat list of entities
+  gridStart: 480, gridEnd: 1320,
+  compareOn: false,
+  slotA: null, slotB: null,     // selected entity objects
+  filters: { departments: null, statuses: new Set(DEFAULT_STATUSES), days: new Set(CONFIG.DAYS), types: new Set(['Theory','Lab','__none__']) },
+  warnings: [],
+};
+
+/* ============================= UTIL ============================= */
+function normalize(s){
+  return String(s||'').toLowerCase().normalize('NFKD').replace(/[^\w\s.-]/g,' ').replace(/\s+/g,' ').trim();
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function titleCaseWords(str, smallWords){
+  smallWords = smallWords || new Set(['of','and','the','in','for','to','a','on','&']);
+  return String(str||'').toLowerCase().split(' ').map((w,i)=>{
+    if(!w) return w;
+    if(i>0 && smallWords.has(w)) return w;
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(' ');
+}
+function titleCaseName(name){
+  return String(name||'').split(' ').filter(Boolean).map(tok=>{
+    return tok.split('-').map(part=>{
+      if(!part) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    }).join('-');
+  }).join(' ');
+}
+function facultyDisplay(r){
+  if(!r.facultyList || !r.facultyList.length) return 'TBA / Staff';
+  return r.facultyList.map(titleCaseName).join(' & ');
+}
+function pickMostCommon(map){
+  let best=null,bestN=-1;
+  for(const [k,n] of map) if(n>bestN){best=k;bestN=n;}
+  return best;
+}
+function colorForId(id){
+  let h=0; const s=String(id);
+  for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return PALETTE[h % PALETTE.length];
+}
+function fmtTimeRange(a,b){ return (a||'?') + '–' + (b||'?'); }
+function minToClock(min){
+  let h=Math.floor(min/60), m=min%60;
+  const ap = h>=12?'PM':'AM';
+  let h12 = h%12; if(h12===0) h12=12;
+  return h12+':'+String(m).padStart(2,'0')+' '+ap;
+}
+
+/* ============================= PARSE ============================= */
+function findHeaderRow(rows){
+  for(let i=0;i<Math.min(rows.length,30);i++){
+    const row = (rows[i]||[]).map(c=>String(c).trim().toLowerCase().replace(/\s+/g,' '));
+    if(row.includes('class id') && row.includes('faculty') && row.includes('section')) return i;
+  }
+  return -1;
+}
+function stripSectionSuffix(title){
+  return String(title||'').trim().replace(/\s*\[[^\]]*\]\s*$/,'').trim();
+}
+// Some rows (studio/critique-style courses) list several co-instructors in one cell as
+// multiple bracketed names, e.g. "[AJMERI NUSRAT SHOMA] [DR. SANJIB BARUA] [NUSHRAT-E-HOQUE]".
+// Returns an array so every named instructor gets their own searchable schedule.
+function parseFacultyList(raw){
+  const s = String(raw||'').trim();
+  if(!s || s === '-') return [];
+  const matches = [...s.matchAll(/\[([^\]]+)\]/g)].map(m=>m[1].trim().replace(/\s+/g,' ')).filter(Boolean);
+  if(matches.length) return matches;
+  return [s.replace(/\s+/g,' ')]; // defensive fallback if a future export omits brackets
+}
+function parseTimeToMinutes(t){
+  const s = String(t||'').trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
+  if(!m) return null;
+  let h = parseInt(m[1],10); const min = parseInt(m[2],10); const ap = m[3].toUpperCase();
+  if(ap==='PM' && h!==12) h+=12;
+  if(ap==='AM' && h===12) h=0;
+  return h*60+min;
+}
+async function loadWorkbook(){
+  const res = await fetch(CONFIG.DATA_URL, {cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status+' fetching '+CONFIG.DATA_URL);
+  const lm = res.headers.get('last-modified');
+  if(lm) document.getElementById('lastMod').textContent = ' · file last modified ' + new Date(lm).toLocaleDateString();
+  const buf = await res.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
+  const headerIdx = findHeaderRow(rows);
+  if(headerIdx===-1) throw new Error('Could not locate the header row (expected columns like "Class ID", "Faculty", "Section") in the first sheet.');
+  const header = rows[headerIdx].map(c=>String(c).trim());
+  const colMap = {};
+  header.forEach((h,i)=>{ if(h) colMap[h]=i; });
+  const need = ['Class ID','Course Code'];
+  for(const n of need) if(colMap[n]===undefined) throw new Error('Required column "'+n+'" not found in the sheet header.');
+
+  const records = [];
+  const warnings = [];
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const r = rows[i];
+    if(!r || r.every(c=>String(c).trim()==='')) continue;
+    const get = name => colMap[name]!==undefined ? String(r[colMap[name]] ?? '').trim() : '';
+    const classId = get('Class ID');
+    const courseCode = get('Course Code');
+    if(!classId || !courseCode) continue;
+    const startTime = get('Start Time'), endTime = get('End Time');
+    const startMin = parseTimeToMinutes(startTime), endMin = parseTimeToMinutes(endTime);
+    if(startTime && startMin===null) warnings.push('Row '+(i+1)+': could not parse Start Time "'+startTime+'" (class '+classId+')');
+    if(endTime && endMin===null) warnings.push('Row '+(i+1)+': could not parse End Time "'+endTime+'" (class '+classId+')');
+    const facultyList = parseFacultyList(get('Faculty'));
+    records.push({
+      classId, courseCode: courseCode.toUpperCase(),
+      status: get('Status') || 'Unknown',
+      capacity: get('Capacity'), count: get('Count'),
+      courseTitle: stripSectionSuffix(get('Course Title')),
+      section: get('Section'),
+      facultyList,
+      faculty: facultyList.length ? facultyList.join(' & ') : null,
+      type: get('Type') || null,
+      day: get('Day') || null,
+      startTime: startTime || null, endTime: endTime || null,
+      startMin, endMin,
+      room: get('Room') || null,
+      department: get('Department') || null,
+    });
+  }
+  STATE.warnings = warnings;
+  return records;
+}
+
+/* ============================= INDEX ============================= */
+function buildIndices(records){
+  const faculty=new Map(), sections=new Map(), courses=new Map(), rooms=new Map(), depts=new Set();
+  for(const r of records){
+    if(r.department) depts.add(r.department);
+    for(const name of (r.facultyList||[])){
+      if(!faculty.has(name)) faculty.set(name,[]);
+      faculty.get(name).push(r);
+    }
+    if(r.section){ if(!sections.has(r.section)) sections.set(r.section,[]); sections.get(r.section).push(r); }
+    if(!courses.has(r.courseCode)) courses.set(r.courseCode,{titles:new Map(),records:[]});
+    const c = courses.get(r.courseCode); c.records.push(r);
+    c.titles.set(r.courseTitle, (c.titles.get(r.courseTitle)||0)+1);
+    if(r.room){ if(!rooms.has(r.room)) rooms.set(r.room,[]); rooms.get(r.room).push(r); }
+  }
+  return {faculty,sections,courses,rooms,depts};
+}
+function countWeekly(recs){ return recs.filter(r=>r.day && r.startMin!=null && r.endMin!=null).length; }
+
+function buildSearchIndex(idx){
+  const list = [];
+  for(const [name,recs] of idx.faculty){
+    list.push({type:'faculty', id:name, label:titleCaseName(name), sub:'Faculty · '+countWeekly(recs)+'/wk', records:recs, norm:normalize(name)});
+  }
+  for(const [sec,recs] of idx.sections){
+    if(!CONFIG.COHORT_RE.test(sec)) continue;
+    const codes = new Set(recs.map(r=>r.courseCode));
+    list.push({type:'section', id:sec, label:sec, sub:'Batch · '+codes.size+' course'+(codes.size===1?'':'s'), records:recs, norm:normalize(sec)});
+  }
+  for(const [code,obj] of idx.courses){
+    const title = pickMostCommon(obj.titles) || '';
+    list.push({type:'course', id:code, label:code+' — '+titleCaseWords(title), sub:'Course · '+obj.records.length+' entries', records:obj.records, norm:normalize(code+' '+title)});
+  }
+  for(const [room,recs] of idx.rooms){
+    list.push({type:'room', id:room, label:room, sub:'Room · '+countWeekly(recs)+'/wk', records:recs, norm:normalize(room)});
+  }
+  return list;
+}
+function searchEntities(query, limit){
+  limit = limit||30;
+  const q = normalize(query);
+  if(!q) return [];
+  const tokens = q.split(' ').filter(Boolean);
+  const scored = [];
+  for(const e of STATE.searchIndex){
+    let ok=true, score=0;
+    for(const t of tokens){
+      const pos = e.norm.indexOf(t);
+      if(pos===-1){ ok=false; break; }
+      score += (pos===0?0:(pos<3?2:5));
+    }
+    if(ok) scored.push([score,e]);
+  }
+  scored.sort((a,b)=> a[0]-b[0] || a[1].label.localeCompare(b[1].label));
+  return scored.slice(0,limit).map(x=>x[1]);
+}
+
+/* ============================= FILTERS ============================= */
+function passesFilters(r){
+  const f = STATE.filters;
+  if(f.departments && r.department && !f.departments.has(r.department)) return false;
+  if(f.departments && !r.department && !f.departments.has('__none__')) return false;
+  if(!f.statuses.has(r.status)) return false;
+  if(r.day && !f.days.has(r.day)) return false;
+  const typeKey = r.type || '__none__';
+  if(!f.types.has(typeKey)) return false;
+  return true;
+}
+function filteredScheduled(records){
+  return records.filter(r=> r.day && r.startMin!=null && r.endMin!=null && passesFilters(r));
+}
+
+/* ============================= GRID BOUNDS ============================= */
+function computeGridBounds(records){
+  const sched = records.filter(r=>r.day && r.startMin!=null && r.endMin!=null);
+  if(!sched.length) return;
+  let mn=Infinity, mx=-Infinity;
+  for(const r of sched){ if(r.startMin<mn) mn=r.startMin; if(r.endMin>mx) mx=r.endMin; }
+  STATE.gridStart = Math.floor(mn/60)*60;
+  STATE.gridEnd = Math.ceil(mx/60)*60;
+}
+
+/* ============================= OVERLAP PACKING ============================= */
+function packEvents(events){
+  const sorted = events.slice().sort((a,b)=> a.startMin-b.startMin || a.endMin-b.endMin);
+  const tracks = []; // last end time per track
+  const placed = [];
+  for(const ev of sorted){
+    let placedTrack = -1;
+    for(let i=0;i<tracks.length;i++){ if(tracks[i] <= ev.startMin){ placedTrack=i; break; } }
+    if(placedTrack===-1){ placedTrack = tracks.length; tracks.push(0); }
+    tracks[placedTrack] = ev.endMin;
+    placed.push(Object.assign({}, ev, {__track:placedTrack}));
+  }
+  // compute overlap-cluster track count: for simplicity use global max tracks per day call
+  const trackCount = tracks.length || 1;
+  placed.forEach(p=>p.__trackCount = trackCount);
+  return placed;
+}
+
+/* ============================= RENDER: GRID HEAD/GUTTER ============================= */
+function renderGridSkeleton(){
+  const head = document.getElementById('gridHead');
+  head.innerHTML = '<div class="cell"></div>' + CONFIG.DAYS.map(d=>{
+    const wk = CONFIG.WEEKEND.has(d) ? ' style="color:var(--mute)"' : '';
+    return '<div class="cell"'+wk+'>'+d+'</div>';
+  }).join('');
+
+  const body = document.getElementById('gridBody');
+  const totalMin = STATE.gridEnd - STATE.gridStart;
+  const heightPx = totalMin * CONFIG.px_per_min_val;
+  let gutterHtml = '<div class="gutter" style="height:'+heightPx+'px">';
+  for(let m=STATE.gridStart; m<=STATE.gridEnd; m+=60){
+    const top = (m-STATE.gridStart)*CONFIG.px_per_min_val;
+    gutterHtml += '<div class="hr" style="top:'+top+'px">'+minToClock(m)+'</div>';
+  }
+  gutterHtml += '</div>';
+
+  let cols = '';
+  for(const d of CONFIG.DAYS){
+    cols += '<div class="daycol'+(CONFIG.WEEKEND.has(d)?' weekend':'')+'" style="height:'+heightPx+'px" data-day="'+d+'"></div>';
+  }
+  body.innerHTML = gutterHtml + cols;
+}
+CONFIG.px_per_min_val = 1;
+
+/* ============================= RENDER: EVENTS (single or compare) ============================= */
+function eventBlockHtml(r, color, laneWidthPct, laneLeftPct, compact){
+  const top = (r.startMin - STATE.gridStart) * CONFIG.px_per_min_val;
+  const height = Math.max(20,(r.endMin - r.startMin) * CONFIG.px_per_min_val);
+  const meta = [r.type, r.section?('Sec '+r.section):null].filter(Boolean).join(' · ');
+  return '<div class="ev'+(compact?' compact':'')+'" style="top:'+top+'px;height:'+height+'px;left:'+laneLeftPct+'%;width:calc('+laneWidthPct+'% - 4px);background:'+color+'" '
+    + 'data-classid="'+escapeHtml(r.classId)+'" data-day="'+escapeHtml(r.day)+'" data-start="'+r.startMin+'">'
+    + '<div class="t-title">'+escapeHtml(titleCaseWords(r.courseTitle))+'</div>'
+    + '<div class="t-meta">'+escapeHtml(meta)+'</div>'
+    + '<div class="t-room">Room '+escapeHtml(r.room||'TBA')+'</div>'
+    + '<div class="t-time">'+escapeHtml(fmtTimeRange(r.startTime,r.endTime))+'</div>'
+    + '</div>';
+}
+
+function renderSingle(entity){
+  STATE.compareOn = false;
+  document.body.classList.remove('compare-on');
+  const all = filteredScheduled(entity.records);
+  computeGridBoundsSafe(all);
+  renderGridSkeleton();
+  const byDay = {};
+  for(const d of CONFIG.DAYS) byDay[d]=[];
+  for(const r of all) if(byDay[r.day]) byDay[r.day].push(r);
+
+  for(const d of CONFIG.DAYS){
+    const packed = packEvents(byDay[d]);
+    const col = document.querySelector('.daycol[data-day="'+cssEscape(d)+'"]');
+    let html = '';
+    for(const ev of packed){
+      const w = 100/ev.__trackCount;
+      const left = ev.__track*w;
+      html += eventBlockHtml(ev, colorForId(ev.classId), w, left, ev.__trackCount>1);
+    }
+    col.innerHTML = html;
+  }
+  renderMetaSingle(entity, all);
+  renderLegendSingle();
+  document.getElementById('gapsPanel').innerHTML = '';
+  renderTable(all);
+  wireEventClicks();
+}
+
+function renderCompare(entityA, entityB){
+  STATE.compareOn = true;
+  const all = filteredScheduled(entityA.records).map(r=>Object.assign({__lane:'A'},r))
+    .concat(filteredScheduled(entityB.records).map(r=>Object.assign({__lane:'B'},r)));
+  computeGridBoundsSafe(all);
+  renderGridSkeleton();
+  const byDay = {}; for(const d of CONFIG.DAYS) byDay[d]=[];
+  for(const r of all) if(byDay[r.day]) byDay[r.day].push(r);
+
+  for(const d of CONFIG.DAYS){
+    const col = document.querySelector('.daycol[data-day="'+cssEscape(d)+'"]');
+    const aEvs = packEvents(byDay[d].filter(r=>r.__lane==='A'));
+    const bEvs = packEvents(byDay[d].filter(r=>r.__lane==='B'));
+    let html='';
+    for(const ev of aEvs) html += eventBlockHtml(ev, 'var(--lane-a)', 50/ev.__trackCount, (ev.__track*50/ev.__trackCount), true);
+    for(const ev of bEvs) html += eventBlockHtml(ev, 'var(--lane-b)', 50/ev.__trackCount, 50+(ev.__track*50/ev.__trackCount), true);
+    col.innerHTML = html;
+  }
+  renderMetaCompare(entityA, entityB);
+  renderLegendCompare(entityA, entityB);
+  renderGaps(entityA, entityB, byDay);
+  renderTable(all);
+  wireEventClicks();
+}
+
+function computeGridBoundsSafe(records){
+  if(records.length) computeGridBounds(records);
+}
+function cssEscape(s){ return String(s).replace(/"/g,'\\"'); }
+
+/* ============================= META / LEGEND ============================= */
+function kindLabel(t){ return {faculty:'Faculty',section:'Batch section',course:'Course',room:'Room'}[t]||t; }
+
+function renderMetaSingle(entity, records){
+  const el = document.getElementById('resultsMeta');
+  const n = records.length;
+  el.innerHTML =
+    '<div class="entity-card">'
+    + '<div><div class="entity-sub">'+kindLabel(entity.type)+'</div>'
+    + '<div class="entity-title">'+escapeHtml(entity.label)+'</div>'
+    + '<div class="entity-sub">'+n+' session'+(n===1?'':'s')+' this week'+(distinctRoomsNote(records))+'</div></div>'
+    + '</div>';
+}
+function renderMetaCompare(a,b){
+  const el = document.getElementById('resultsMeta');
+  el.innerHTML =
+    '<div class="entity-card"><div><div class="entity-sub">Comparing</div>'
+    + '<div class="entity-title">'+escapeHtml(a.label)+' <span style="color:var(--mute-2);font-weight:400;">vs</span> '+escapeHtml(b.label)+'</div>'
+    + '</div></div>';
+}
+function distinctRoomsNote(records){
+  const rooms = new Set(records.map(r=>r.room).filter(Boolean));
+  return rooms.size ? ' · '+rooms.size+' room'+(rooms.size===1?'':'s') : '';
+}
+function renderLegendSingle(){
+  document.getElementById('resultsMeta').insertAdjacentHTML('beforeend',
+    '<div class="legend"><div class="item"><span class="dot" style="background:'+PALETTE[0]+'"></span>each colour = one distinct class</div></div>');
+}
+function renderLegendCompare(a,b){
+  document.getElementById('resultsMeta').insertAdjacentHTML('beforeend',
+    '<div class="legend">'
+    + '<div class="item"><span class="dot" style="background:var(--lane-a)"></span>'+escapeHtml(a.label)+'</div>'
+    + '<div class="item"><span class="dot" style="background:var(--lane-b)"></span>'+escapeHtml(b.label)+'</div>'
+    + '</div>');
+}
+
+/* ============================= GAP FINDER ============================= */
+function computeFreeWindows(dayRecs){
+  const busy = dayRecs.map(r=>[r.startMin,r.endMin]).sort((x,y)=>x[0]-y[0]);
+  const merged=[];
+  for(const [s,e] of busy){
+    if(merged.length && s<=merged[merged.length-1][1]) merged[merged.length-1][1]=Math.max(merged[merged.length-1][1],e);
+    else merged.push([s,e]);
+  }
+  const free=[]; let cursor=STATE.gridStart;
+  for(const [s,e] of merged){ if(s-cursor>=CONFIG.MIN_GAP_MIN) free.push([cursor,s]); cursor=Math.max(cursor,e); }
+  if(STATE.gridEnd-cursor>=CONFIG.MIN_GAP_MIN) free.push([cursor,STATE.gridEnd]);
+  return free;
+}
+function renderGaps(a,b,byDay){
+  let html = '<div class="gaps"><h4>Common free windows (both clear, ≥'+CONFIG.MIN_GAP_MIN+' min)</h4><div class="gaps-grid">';
+  for(const d of CONFIG.DAYS){
+    const free = computeFreeWindows(byDay[d]);
+    html += '<div class="dayblock"><div class="dname">'+d.slice(0,3)+'</div>';
+    if(!free.length) html += '<div class="none">—</div>';
+    else html += free.map(w=>'<div class="win">'+minToClock(w[0])+'–'+minToClock(w[1])+'</div>').join('');
+    html += '</div>';
+  }
+  html += '</div></div>';
+  document.getElementById('gapsPanel').innerHTML = html;
+}
+
+/* ============================= TABLE ============================= */
+function renderTable(records){
+  const body = document.getElementById('schedTableBody');
+  const sorted = records.slice().sort((a,b)=> CONFIG.DAYS.indexOf(a.day)-CONFIG.DAYS.indexOf(b.day) || (a.startMin-b.startMin));
+  body.innerHTML = sorted.map(r=>{
+    return '<tr>'
+      + '<td>'+escapeHtml(r.day||'—')+'</td>'
+      + '<td style="font-family:var(--mono);font-size:11.5px">'+escapeHtml(fmtTimeRange(r.startTime,r.endTime))+'</td>'
+      + '<td>'+escapeHtml(r.courseCode)+' — '+escapeHtml(titleCaseWords(r.courseTitle))+'</td>'
+      + '<td>'+escapeHtml(r.section||'—')+'</td>'
+      + '<td>'+escapeHtml(facultyDisplay(r))+'</td>'
+      + '<td style="font-family:var(--mono);font-size:11.5px">'+escapeHtml(r.room||'TBA')+'</td>'
+      + '<td>'+escapeHtml(r.type||'—')+'</td>'
+      + '<td><span class="pill '+escapeHtml(r.status)+'">'+escapeHtml(r.status)+'</span></td>'
+      + '<td style="font-family:var(--mono);font-size:11.5px">'+escapeHtml(r.count||'—')+'/'+escapeHtml(r.capacity||'—')+'</td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="9" style="color:var(--mute);text-align:center;padding:24px;">No sessions match the current filters.</td></tr>';
+}
+
+/* ============================= DETAIL POPOVER ============================= */
+function wireEventClicks(){
+  document.querySelectorAll('.ev').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const classId = el.getAttribute('data-classid');
+      const rec = STATE.records.find(r=>r.classId===classId && r.day===el.getAttribute('data-day') && String(r.startMin)===el.getAttribute('data-start'));
+      if(rec) openDetail(rec);
+    });
+  });
+}
+function openDetail(r){
+  const box = document.getElementById('detailBox');
+  box.innerHTML =
+    '<h3>'+escapeHtml(titleCaseWords(r.courseTitle))+'</h3>'
+    + '<div class="code">'+escapeHtml(r.courseCode)+' · Class ID '+escapeHtml(r.classId)+' · Section '+escapeHtml(r.section||'—')+'</div>'
+    + '<dl>'
+    + '<dt>Faculty</dt><dd>'+escapeHtml(facultyDisplay(r))+'</dd>'
+    + '<dt>Day</dt><dd>'+escapeHtml(r.day||'—')+'</dd>'
+    + '<dt>Time</dt><dd>'+escapeHtml(fmtTimeRange(r.startTime,r.endTime))+'</dd>'
+    + '<dt>Room</dt><dd>'+escapeHtml(r.room||'TBA')+'</dd>'
+    + '<dt>Type</dt><dd>'+escapeHtml(r.type||'—')+'</dd>'
+    + '<dt>Status</dt><dd>'+escapeHtml(r.status)+'</dd>'
+    + '<dt>Seats</dt><dd>'+escapeHtml(r.count||'—')+' enrolled / '+escapeHtml(r.capacity||'—')+' capacity</dd>'
+    + '<dt>Department</dt><dd>'+escapeHtml(r.department?titleCaseWords(r.department):'—')+'</dd>'
+    + '</dl>'
+    + '<button class="btn on close" id="closeDetail">Close</button>';
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeDetail').addEventListener('click', closeDetail);
+}
+function closeDetail(){ document.getElementById('overlay').classList.remove('open'); }
+
+/* ============================= FILTER UI ============================= */
+function renderFilterUI(){
+  const body = document.getElementById('filtersBody');
+  const depts = [...STATE.idx.depts].sort();
+  STATE.filters.departments = new Set([...depts, '__none__']);
+
+  const deptHtml = depts.map(d=>
+    '<label class="f-opt"><input type="checkbox" checked data-fgroup="dept" value="'+escapeHtml(d)+'">'+escapeHtml(titleCaseWords(d))+'</label>'
+  ).join('') + '<label class="f-opt"><input type="checkbox" checked data-fgroup="dept" value="__none__">Unspecified</label>';
+
+  const statusHtml = STATUS_ORDER.map(s=>
+    '<label class="f-opt"><input type="checkbox" '+(DEFAULT_STATUSES.has(s)?'checked':'')+' data-fgroup="status" value="'+s+'">'+s+'</label>'
+  ).join('');
+
+  const dayHtml = CONFIG.DAYS.map(d=>
+    '<label class="f-opt"><input type="checkbox" checked data-fgroup="day" value="'+d+'">'+d+'</label>'
+  ).join('');
+
+  const typeHtml = ['Theory','Lab','__none__'].map(t=>
+    '<label class="f-opt"><input type="checkbox" checked data-fgroup="type" value="'+t+'">'+(t==='__none__'?'Unspecified':t)+'</label>'
+  ).join('');
+
+  body.innerHTML =
+    '<div class="f-group"><h4>Department</h4>'+deptHtml+'</div>'
+    + '<div class="f-group"><h4>Status</h4>'+statusHtml+'<p style="color:var(--mute-2);font-size:11px;margin:8px 0 0;">Freshman = closed-credit batch course. Reserved = seats held back. Cancel/Closed hidden by default.</p></div>'
+    + '<div class="f-group"><h4>Day</h4>'+dayHtml+'</div>'
+    + '<div class="f-group"><h4>Type</h4>'+typeHtml+'</div>';
+
+  body.addEventListener('change', onFilterChange);
+}
+function onFilterChange(e){
+  const t = e.target; if(!t.matches('input[type="checkbox"]')) return;
+  const group = t.getAttribute('data-fgroup'); const val = t.value;
+  const map = {dept:'departments', status:'statuses', day:'days', type:'types'};
+  const set = STATE.filters[map[group]];
+  if(t.checked) set.add(val); else set.delete(val);
+  rerenderCurrent();
+}
+
+/* ============================= QUICK CHIPS ============================= */
+function renderQuickChips(){
+  const chips = document.getElementById('quickChips');
+  const cohortSections = STATE.searchIndex.filter(e=>e.type==='section')
+    .sort((a,b)=> a.id.localeCompare(b.id, undefined,{numeric:true}))
+    .slice(0,10);
+  let html = cohortSections.map(e=>'<button class="chip" data-eid="'+e.type+':'+escapeHtml(e.id)+'"><strong>'+escapeHtml(e.id)+'</strong> batch</button>').join('');
+  chips.innerHTML = html;
+  chips.addEventListener('click', e=>{
+    const b = e.target.closest('.chip'); if(!b) return;
+    const [type,id] = b.getAttribute('data-eid').split(':');
+    const ent = STATE.searchIndex.find(x=>x.type===type && x.id===id);
+    if(ent) selectEntity(ent,'A');
+  });
+}
+
+/* ============================= SEARCH UI WIRING ============================= */
+function wireSearchSlot(slot){
+  const input = document.getElementById('input'+slot);
+  const suggest = document.getElementById('suggest'+slot);
+  const clearBtn = document.getElementById('clear'+slot);
+  let activeIdx = -1, currentList = [];
+
+  function renderSuggest(list){
+    currentList = list; activeIdx = -1;
+    if(!list.length){
+      suggest.innerHTML = input.value.trim() ? '<div class="empty">No matches. Try a faculty last name, e.g. "B1" for a batch, or a course code like "CSC1103".</div>' : '';
+      suggest.classList.toggle('open', !!input.value.trim());
+      return;
+    }
+    suggest.innerHTML = list.map((e,i)=>
+      '<div class="row" data-i="'+i+'" role="option"><span class="kind '+e.type+'">'+e.type+'</span>'
+      + '<span class="label" style="flex:1">'+escapeHtml(e.label)+'</span>'
+      + '<span class="sub">'+escapeHtml(e.sub)+'</span></div>'
+    ).join('');
+    suggest.classList.add('open');
+  }
+  input.addEventListener('input', ()=>{
+    clearBtn.hidden = !input.value;
+    renderSuggest(searchEntities(input.value));
+  });
+  input.addEventListener('focus', ()=>{ if(input.value.trim()) renderSuggest(searchEntities(input.value)); });
+  input.addEventListener('keydown', (e)=>{
+    if(!suggest.classList.contains('open')) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); activeIdx = Math.min(activeIdx+1, currentList.length-1); highlightActive(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); activeIdx = Math.max(activeIdx-1,0); highlightActive(); }
+    else if(e.key==='Enter'){ e.preventDefault(); if(activeIdx>=0 && currentList[activeIdx]) chooseEntity(currentList[activeIdx]); }
+    else if(e.key==='Escape'){ suggest.classList.remove('open'); }
+  });
+  function highlightActive(){
+    [...suggest.querySelectorAll('.row')].forEach((r,i)=>r.classList.toggle('active', i===activeIdx));
+    const el = suggest.querySelector('.row.active'); if(el) el.scrollIntoView({block:'nearest'});
+  }
+  suggest.addEventListener('click', e=>{
+    const row = e.target.closest('.row'); if(!row) return;
+    const i = parseInt(row.getAttribute('data-i'),10);
+    if(currentList[i]) chooseEntity(currentList[i]);
+  });
+  clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.hidden=true; suggest.classList.remove('open'); if(slot==='A') STATE.slotA=null; else STATE.slotB=null; renderCurrentOrEmpty(); });
+  document.addEventListener('click', e=>{ if(!e.target.closest('.search-slot')) suggest.classList.remove('open'); });
+
+  function chooseEntity(entity){
+    input.value = entity.label;
+    clearBtn.hidden = false;
+    suggest.classList.remove('open');
+    selectEntity(entity, slot);
+  }
+}
+
+function selectEntity(entity, slot){
+  if(slot==='A'){ STATE.slotA = entity; document.getElementById('inputA').value = entity.label; document.getElementById('clearA').hidden=false; }
+  else { STATE.slotB = entity; document.getElementById('inputB').value = entity.label; document.getElementById('clearB').hidden=false; }
+  location.hash = STATE.compareOn && STATE.slotA && STATE.slotB
+    ? 'cmp='+STATE.slotA.type+':'+encodeURIComponent(STATE.slotA.id)+'|'+STATE.slotB.type+':'+encodeURIComponent(STATE.slotB.id)
+    : (STATE.slotA ? STATE.slotA.type+'='+encodeURIComponent(STATE.slotA.id) : '');
+  rerenderCurrent();
+}
+function rerenderCurrent(){
+  document.getElementById('mainArea').style.display='';
+  if(STATE.compareOn && STATE.slotA && STATE.slotB) renderCompare(STATE.slotA, STATE.slotB);
+  else if(STATE.slotA) renderSingle(STATE.slotA);
+  else renderCurrentOrEmpty();
+}
+function renderCurrentOrEmpty(){
+  if(!STATE.slotA && !STATE.slotB){ document.getElementById('mainArea').style.display='none'; return; }
+  rerenderCurrent();
+}
+
+/* ============================= COMPARE TOGGLE ============================= */
+document.getElementById('compareBtn').addEventListener('click', ()=>{
+  STATE.compareOn = !STATE.compareOn;
+  const btn = document.getElementById('compareBtn');
+  btn.classList.toggle('on', STATE.compareOn);
+  btn.setAttribute('aria-pressed', String(STATE.compareOn));
+  document.getElementById('slotB').style.display = STATE.compareOn ? 'flex' : 'none';
+  document.getElementById('searchbar').classList.toggle('compare-mode', STATE.compareOn);
+  if(!STATE.compareOn) STATE.slotB=null;
+  rerenderCurrent();
+});
+document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeDetail(); });
+document.getElementById('tableToggleBtn').addEventListener('click', ()=>{
+  const w = document.getElementById('tableWrap'); const open = w.classList.toggle('open');
+  document.getElementById('tableToggleBtn').textContent = (open?'▴':'▾')+' View as table';
+});
+document.getElementById('filtersHead').addEventListener('click', ()=>{
+  document.getElementById('filtersToggle').classList.toggle('open');
+});
+document.getElementById('diagBtn').addEventListener('click', ()=>{
+  const p = document.getElementById('diagPanel');
+  if(!p.classList.contains('open')){
+    p.textContent = [
+      'Total rows parsed: '+STATE.records.length,
+      'Scheduled sessions (have day+time): '+STATE.records.filter(r=>r.day&&r.startMin!=null).length,
+      'Distinct faculty: '+STATE.idx.faculty.size,
+      'Distinct sections: '+STATE.idx.sections.size+' (cohort-style: '+STATE.searchIndex.filter(e=>e.type==='section').length+')',
+      'Distinct courses: '+STATE.idx.courses.size,
+      'Distinct rooms: '+STATE.idx.rooms.size,
+      'Parse warnings: '+STATE.warnings.length,
+      ...STATE.warnings.slice(0,15)
+    ].join('\n');
+  }
+  p.classList.toggle('open');
+});
+
+/* ============================= HASH ROUTING ============================= */
+function applyHash(){
+  const h = location.hash.replace(/^#/,'');
+  if(!h) return;
+  if(h.startsWith('cmp=')){
+    const [a,b] = h.slice(4).split('|');
+    const [ta,ida] = a.split(':'); const [tb,idb] = b.split(':');
+    const ea = STATE.searchIndex.find(e=>e.type===ta && e.id===decodeURIComponent(ida));
+    const eb = STATE.searchIndex.find(e=>e.type===tb && e.id===decodeURIComponent(idb));
+    if(ea && eb){
+      STATE.compareOn = true;
+      document.getElementById('compareBtn').classList.add('on');
+      document.getElementById('slotB').style.display='flex';
+      document.getElementById('searchbar').classList.add('compare-mode');
+      selectEntity(ea,'A'); selectEntity(eb,'B');
+    }
+  } else {
+    const [type,id] = h.split('=');
+    const ent = STATE.searchIndex.find(e=>e.type===type && e.id===decodeURIComponent(id||''));
+    if(ent) selectEntity(ent,'A');
+  }
+}
+
+/* ============================= BOOT ============================= */
+function showBanner(html, isErr){
+  document.getElementById('banner').innerHTML = '<div class="notice'+(isErr?' err':'')+'">'+html+'</div>';
+}
+async function boot(){
+  try{
+    showBanner('Loading the current offered-course report…');
+    const records = await loadWorkbook();
+    STATE.records = records;
+    STATE.idx = buildIndices(records);
+    STATE.searchIndex = buildSearchIndex(STATE.idx);
+    document.getElementById('banner').innerHTML='';
+    renderFilterUI();
+    renderQuickChips();
+    wireSearchSlot('A'); wireSearchSlot('B');
+    applyHash();
+  } catch(err){
+    console.error(err);
+    showBanner(
+      'Could not load the schedule data (<code>'+escapeHtml(err.message)+'</code>). '
+      + 'If you opened this file directly from disk, browsers block local file reads — serve the folder instead, e.g. <code>npx serve</code> or <code>python -m http.server</code>, then open it via <code>http://localhost:…</code>. '
+      + 'On GitHub Pages, double-check that <code>data/Offered_Course_Report.xlsx</code> exists at that exact path in the repo.',
+      true
+    );
+  }
+}
+window.addEventListener('hashchange', applyHash);
+boot();
+</script>
+</body>
+</html>

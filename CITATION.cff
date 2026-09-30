@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use or discuss Schedula in academic work, please cite it using this metadata."
+title: "Schedula: A Zero-Backend Academic Timetable Intelligence Interface for AIUB Offered-Course Data"
+type: software
+authors:
+  - family-names: "Sudipta"
+repository-code: "https://github.com/the-sudipta/schedula"
+url: "https://the-sudipta.github.io/schedula/"
+abstract: "Schedula is a static, zero-backend timetable interface that transforms AIUB offered-course spreadsheet data into searchable faculty, batch, course, and room routines using client-side parsing and visualization."
+keywords:
+  - academic timetabling
+  - spreadsheet wrangling
+  - course scheduling
+  - data visualization
+  - static web app
+  - AIUB
+license: "LicenseRef-Proprietary"
+version: "1.0.0"
+date-released: "2026-07-09"

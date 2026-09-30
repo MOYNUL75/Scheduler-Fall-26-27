@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Schedula mark</title>
+  <desc id="desc">A refined S monogram with timetable lines and a warm time accent.</desc>
+  <defs>
+    <linearGradient id="schedulaLine" x1="15" y1="12" x2="49" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eef4f7"/>
+      <stop offset="0.58" stop-color="#49c7c0"/>
+      <stop offset="1" stop-color="#2f8f88"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="15" fill="#101b26" stroke="rgba(255,255,255,.12)"/>
+  <path d="M20 17.5h25" stroke="#eef4f7" stroke-width="1.35" stroke-linecap="round" opacity=".42"/>
+  <path d="M20 32h25" stroke="#eef4f7" stroke-width="1.35" stroke-linecap="round" opacity=".24"/>
+  <path d="M20 46.5h25" stroke="#eef4f7" stroke-width="1.35" stroke-linecap="round" opacity=".42"/>
+  <path d="M42.8 16.4C38 10.8 24.9 10.5 21.6 18.3c-4.6 10.8 23.6 9.5 20.1 21.9-2.8 10-18.9 10.5-24.2 2.7" fill="none" stroke="url(#schedulaLine)" stroke-width="4.25" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+  <path d="M31.8 12.5v39" stroke="#eef4f7" stroke-width="1.45" stroke-linecap="round" opacity=".72"/>
+  <circle cx="45.8" cy="17.5" r="2.4" fill="#ffb648"/>
+  <circle cx="31.8" cy="32" r="1.55" fill="#ffb648" opacity=".9"/>
+</svg>
